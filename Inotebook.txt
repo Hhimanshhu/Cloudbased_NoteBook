@@ -1,0 +1,2894 @@
+BACKEND
+
+index.js
+const express = require('express');
+const cors = require('cors');
+const connectToMongo = require('./db'); // ✅ Add this line
+connectToMongo(); // ✅ And this line
+
+const app = express();
+
+app.use(cors()); // Allow all origins by default
+app.use(express.json());
+
+// Your routes come after middleware
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/notes', require('./routes/notes'));
+
+app.listen(5000, () => {
+  console.log("Server started on port 5000");
+});
+
+
+
+db.js
+const mongoose = require('mongoose');
+
+const connectToMongo = async () => {
+  try {
+    await mongoose.connect('mongodb://localhost:27017/inotebook');
+    console.log("Connected to Mongo Successfully");
+  } catch (error) {
+    console.error("Failed to connect to Mongo:", error);
+  }
+};
+
+module.exports = connectToMongo;
+
+
+
+models\Notes.js
+const mongoose = require('mongoose');
+const { Schema } = mongoose;
+
+const NoteSchema = new Schema({
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'user'
+  },
+  title: {
+    type: String,
+    required: true
+  },
+  description: {
+    type: String,
+    required: true
+  },
+  tag: {
+    type: String,
+    default: "General"
+  },
+  pinned: {
+    type: Boolean,
+    default: false
+  },
+  date: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+module.exports = mongoose.model('note', NoteSchema); 
+
+
+models\User.js
+ const mongoose = require('mongoose');
+const { Schema } = mongoose;
+ const UserSchema = new Schema({
+    name: {
+        type: String,
+        required: true
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true
+    },
+    password: {
+        type: String,
+        required: true
+    },
+    date: {
+        type: Date,
+        default: Date.now
+    }
+ });
+
+ const User = mongoose.model('user', UserSchema); 
+ module.exports = User;
+
+
+
+routes\auth.js
+const express = require("express");
+const router = express.Router();
+const User = require("../models/User");
+const { body, validationResult } = require("express-validator");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+const fetchuser = require("../middleware/fetchuser");
+
+
+const JWT_SECRET = "mynameisHimanshu@Boss";
+
+
+// ROUTE 1: Create a user using POST "/api/auth/createuser". No login required...............................................................
+router.post(
+  "/createuser",
+  [
+    body("name", "Enter a valid name").isLength({ min: 3 }),
+    body("email", "Enter a valid email").isEmail(),
+    body("password", "Password must be at least 5 characters long").isLength({
+      min: 5,
+    }),
+  ],
+  async (req, res) => {
+    let success = false;
+    // Check for validation errors
+    // If there are errors, return a 400 status with the error messages
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({success, errors: errors.array() });
+    }
+    // Check if user email already exists
+
+    try {
+      // Attempt to find a user with the provided email
+      let user = await User.findOne({email: req.body.email });
+      if (user) {
+        return res
+          .status(400)
+          .json({ success, error: "User with this email already exists" });
+      }
+
+      const salt = bcrypt.genSaltSync(10);
+      secPass = await bcrypt.hash(req.body.password, salt); 
+      // If user does not exist, create a new user
+      user = await User.create({
+        name: req.body.name,
+        email: req.body.email,
+        password: secPass
+      });
+      
+      const data = {
+        user: {
+          id: user.id
+        }
+      };
+
+      // If user creation is successful, return the user object
+      const authtoken = jwt.sign(data,JWT_SECRET);
+     
+      success = true;
+      res.json({success,authtoken});
+    
+    
+    } catch (error) {
+      // If an error occurs, return a 500 status with the error message
+      console.error(error.message);
+      res.status(500).send("Internal Server Error");
+    }
+  }
+);
+
+
+
+// Route 2: Authanticate a user using POST "/api/auth/login". No login required..................................................................
+router.post(
+  "/login",
+  [
+    body("email", "Enter a valid email").isEmail(),
+    body("password", "Password cannot be blank").exists(),
+  ],
+  async (req, res) => {
+    let success = false;
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success, errors: errors.array() });
+    }
+
+    const { email, password } = req.body;
+
+    try {
+      // Attempt to find a user with the provided email
+      let user = await User.findOne({ email });
+      if (!user) {
+        return res.status(400).json({ success, error: "Invalid credentials" });
+      }
+
+      // Compare the provided password with the stored hashed password
+      const passwordCompare = await bcrypt.compare(password, user.password);
+      if (!passwordCompare) {
+        success = false;
+        return res.status(400).json({ success, error: "Invalid credentials" });
+      }
+
+      const data = {
+        user: {
+          id: user.id,
+        },
+      };
+
+      // Generate a JWT token for the authenticated user
+      const authtoken = jwt.sign(data, JWT_SECRET);
+      success = true;
+      res.json({ success, authtoken });
+    } catch (error) {
+      console.error(error.message);
+      res.status(500).send("Internal Server Error");
+    }
+  }
+);
+
+
+
+
+//Route 3: Get logged in user details using POST "/api/auth/getuser". Login required...............................................................
+router.post("/getuser",fetchuser,async (req, res) => {
+    try {
+      // Get the user ID from the JWT token
+      userId = req.user.id;
+      // Find the user by ID
+      const user = await User.findById(userId).select("-password");
+      res.send(user);
+    } catch (error) {
+      console.error(error.message);
+      res.status(500).send("Internal Server Error");
+    }
+  }
+);
+module.exports = router;
+
+
+
+
+routes\notes.js
+const express = require('express');
+const router = express.Router();
+const fetchuser = require('../middleware/fetchuser');
+const Notes = require('../models/Notes');
+const { body, validationResult } = require('express-validator');
+
+//Route 1: Fetch all notes using GET "/api/notes/fetchallnotes". Login required...............................................................
+router.get('/fetchallnotes', fetchuser, async (req, res) => {
+    try {
+        const notes = await Notes.find({ user: req.user.id }); // <-- add await here
+        res.json(notes);
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+//Route 2: Add a new note using POST "/api/notes/addnote". Login required...............................................................
+router.post('/addnote', fetchuser, [
+    body('title', 'Enter a valid title').isLength({ min: 3 }),
+    body('description', 'Description must be at least 5 characters long').isLength({ min: 5 }),
+    body('tag', 'Tag must be at least 1 character long')
+], async (req, res) => {
+    // Check for validation errors
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { title, description, tag } = req.body;
+
+    try {
+        const note = new Notes({
+            title,
+            description,
+            tag,
+            user: req.user.id
+        });
+
+        const savedNote = await note.save();
+        res.json(savedNote);
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).send("Internal Server Error");
+    }
+}); 
+
+
+//Route 3: Update an existing note using PUT "/api/notes/updatenote/:id". Login required.................................................. 
+router.put('/updatenote/:id', fetchuser, async (req, res) => {
+    const { title, description, tag, pinned } = req.body;
+
+    // Create a new note object
+    const newNote = {};
+    if (title) { newNote.title = title; }
+    if (description) { newNote.description = description; }
+    if (tag) { newNote.tag = tag; }
+    if (pinned !== undefined) newNote.pinned = pinned;
+    newNote.date = Date.now(); // 👈 This updates the time to NOW
+
+
+    // Find the note to be updated and update it
+    try {
+        let note = await Notes.findById(req.params.id);
+        if (!note) {
+            return res.status(404).send("Not Found");
+        }
+
+        // Check if the user is authorized to update this note
+        if (note.user.toString() !== req.user.id) {
+            return res.status(401).send("Not Allowed");
+        }
+
+        note = await Notes.findByIdAndUpdate(req.params.id, { $set: newNote }, { new: true });
+        res.json({ note });
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+//Route 4: Delete an existing note using DELETE "/api/notes/deletenote/:id". Login required..................................................
+router.delete('/deletenote/:id', fetchuser, async (req, res) => {
+    try {
+        // Find the note to be deleted
+        let note = await Notes.findById(req.params.id);
+        if (!note) {
+            return res.status(404).send("Not Found");
+        }
+
+        // Check if the user is authorized to delete this note
+        if (note.user.toString() !== req.user.id) {
+            return res.status(401).send("Not Allowed");
+        }
+
+        // Delete the note
+        note = await Notes.findByIdAndDelete(req.params.id);
+        res.json({ "Success": "Note has been deleted", note: note });
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).send("Internal Server Error");
+    }
+});
+
+module.exports = router;
+
+
+
+middleware\fetchuser.js
+const jwt = require("jsonwebtoken");
+const JWT_SECRET = "mynameisHimanshu@Boss";
+
+const fetchuser = (req, res, next) => {
+    //get the user from the jwt token and add id to req object
+    const token = req.header("auth-token");
+    if (!token) {
+        return res.status(401).send({ error: "Please authenticate using a valid token" });
+    }
+    try {
+        const data = jwt.verify(token, JWT_SECRET);
+        req.user = data.user; // Attach the user data to the request object
+        next(); // Call the next middleware or route handler
+    } catch (error) {
+        res.status(401).send({ error: "Please authenticate using a valid token" });
+        return;
+    }
+}
+
+
+module.exports = fetchuser;
+
+now this is my code and i am using THUNDER CLIENT
+I created a iNotebook collection in which one folder Authentication in which i create a Newrequest Create New User,User Login using creds , Get user data
+
+for: Create New User
+inside that body
+{
+  "name":"himanshu",
+  "email":"him@gmail.com",
+  "password":"password"
+}
+
+Headers
+Content-Type   application/json
+
+Post url = localhost:5000/api/auth/createuser
+
+for: User Login using creds
+
+inside body
+{
+  "email":"kin1qasd2@gmail.com",
+  "password":"pkinshu@123"
+}
+
+Headers
+Content-Type : application/json
+
+localhost:5000/api/auth/login
+
+For:Get User data
+
+localhost:5000/api/auth/getuser
+
+Headers
+auth-token : token******
+
+
+In iNotebook collection in which i have created a folder Notes in which i create a Newrequest Fetch All Notes
+
+for:Fetch All Notes
+localhost:5000/api/notes/fetchallnotes
+
+Headers
+auth-token : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjgzYzk1ZjQzZTYyMWE5YmE0YTg1MzBmIn0sImlhdCI6MTc0ODg0NTA4M30.YO94zUKZWG5mmg1nTv-5ATAoZb7M5sv1X0d9LIti_Vs
+
+for: Add Notes
+Post : localhost:5000/api/notes/addnote
+Body :
+{
+  "title" : "My Titsdfle",
+  "description" : "Thissdfsd is my note dasdasescription",
+  "tag": "personal"
+  
+}
+
+Headers:
+auth-token : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjgzYzk1ZjQzZTYyMWE5YmE0YTg1MzBmIn0sImlhdCI6MTc0ODg0NTA4M30.YO94zUKZWG5mmg1nTv-5ATAoZb7M5sv1X0d9LIti_Vs
+
+Content-Type: application/json
+
+
+For: Update Notes
+
+Put : localhost:5000/api/notes/updatenote/68433064015b18be80c16db3
+Header:
+auth-token:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjgzYzk1ZjQzZTYyMWE5YmE0YTg1MzBmIn0sImlhdCI6MTc0OTA1ODg0OX0.zhF1ZmS_k_Bat1D4pYRl_cHJEM96jJdFUcM5QL3OjRM
+Content-Type:application/json
+
+
+For : Delete Notes
+Delete : localhost:5000/api/notes/deletenote/6841c1e5185a9e08903758e5
+Header:
+auth-token : eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjp7ImlkIjoiNjgzYzk1ZjQzZTYyMWE5YmE0YTg1MzBmIn0sImlhdCI6MTc0ODg0NTA4M30.YO94zUKZWG5mmg1nTv-5ATAoZb7M5sv1X0d9LIti_Vs
+
+Content-Type:application/json
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ FrontEND
+
+components/About.js
+
+import React, { useEffect } from "react";
+
+const About = () => {
+  useEffect(() => {
+    document.title = "Login | NovaBook";
+  }, []);
+
+  return (
+    <div className="container my-5">
+      <h1 className="mb-4">About NovaBook</h1>
+
+      <section className="mb-4">
+        <h4>📘 What is NovaBook?</h4>
+        <p>
+          NovaBook is your personal note management application where you can
+          securely create, update, and delete notes. Built with simplicity and
+          speed in mind, it's perfect for students, professionals, and anyone
+          who wants to organize their thoughts.
+        </p>
+      </section>
+
+      <section className="mb-4">
+        <h4>📝 How Does It Work?</h4>
+        <ul>
+          <li>Create an account and log in securely</li>
+          <li>Add, edit, and delete your personal notes</li>
+          <li>
+            Your notes are stored securely and privately using authentication
+          </li>
+          <li>
+            Switch between light and dark mode for your preferred experience
+          </li>
+        </ul>
+      </section>
+
+      <section className="mb-4">
+        <h4>📜 Terms & Conditions</h4>
+        <p>By using NovaBook, you agree that:</p>
+        <ul>
+          <li>You are responsible for the content you save</li>
+          <li>You will not use NovaBook for illegal or abusive purposes</li>
+          <li>The app is provided "as is" without warranties of any kind</li>
+        </ul>
+      </section>
+
+      <section className="mb-4">
+        <h4>🔒 Privacy & Security</h4>
+        <p>
+          We value your privacy. Your notes are linked to your account and
+          stored securely. Your data is not shared with any third parties.
+        </p>
+      </section>
+    </div>
+  );
+};
+
+export default About;
+
+
+
+
+components/AddNote.js
+import React, { useState, useContext, useEffect } from "react";
+import notecontext from "../Context/notes/noteContext"; 
+
+const AddNote = (props) => {
+  const context = useContext(notecontext);
+  const { addNote } = context;
+
+  const [note, setNote] = useState({ title: "", description: "", tag: "Default" });
+  const [showInfo, setShowInfo] = useState(true);
+  const [isChecked, setIsChecked] = useState(false);
+
+  // Check localStorage on load
+  useEffect(() => {
+    const hasSeenMessage = localStorage.getItem("hasSeenInfoMessage");
+    if (hasSeenMessage === "true") {
+      setShowInfo(false);
+    }
+  }, []);
+
+  const handleClick = (e) => {
+    e.preventDefault();
+
+    if (showInfo && !isChecked) {
+      props.showAlert("Please agree to the secure notes info.", "danger");
+      return;
+    }
+
+    addNote(note.title, note.description, note.tag);
+    setNote({ title: "", description: "", tag: "" });
+
+    // Hide info after first submission
+    if (showInfo) {
+      localStorage.setItem("hasSeenInfoMessage", "true");
+      setShowInfo(false);
+    }
+
+    props.showAlert("Note Added Successfully", "success");
+  };
+
+  const onchange = (e) => {
+    setNote({ ...note, [e.target.name]: e.target.value });
+  };
+
+  return (
+    <div className="container my-3">
+      <h2>Add Notes</h2>
+      <form className="My-3">
+        <div className="mb-3">
+          <label htmlFor="title" className="form-label">Title</label>
+          <input
+            type="text"
+            className="form-control"
+            id="title"
+            name="title"
+            value={note.title}
+            onChange={onchange}
+          />
+        </div>
+
+        <div className="mb-3">
+          <label htmlFor="description" className="form-label">Description</label>
+          <input
+            type="text"
+            className="form-control"
+            id="description"
+            name="description"
+            value={note.description}
+            onChange={onchange}
+          />
+        </div>
+
+        <div className="mb-3">
+          <label htmlFor="tag" className="form-label">Tag</label>
+          <input
+            type="text"
+            className="form-control"
+            id="tag"
+            name="tag"
+            value={note.tag}
+            onChange={onchange}
+          />
+        </div>
+
+        {showInfo && (
+          <div className="mb-3 form-check">
+            <input
+              type="checkbox"
+              className="form-check-input"
+              id="exampleCheck1"
+              checked={isChecked}
+              onChange={(e) => setIsChecked(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="exampleCheck1">
+              Your Notes are all secure with us.
+            </label>
+          </div>
+        )}
+
+        <button
+          className="btn btn-primary"
+          disabled={note.title.length < 5 || note.description.length < 5}
+          onClick={handleClick}
+          >
+          Submit
+        </button>
+      </form>
+    </div>
+  );
+};
+
+export default AddNote;
+
+
+components/AuthCard.js
+import React, { useContext } from "react";
+import ThemeContext from "../Context/theme/ThemeContext";
+import { Link } from "react-router-dom";
+
+const AuthCard = ({ title, children, footer }) => {
+  const { mode } = useContext(ThemeContext);
+
+  return (
+    <div
+      className={`d-flex justify-content-center align-items-center vh-100 ${
+        mode === "dark" ? "bg-dark text-light" : "bg-light text-dark"
+      }`}
+    >
+      <div
+        className={`card shadow p-4 rounded-4 w-100 mx-3`}
+        style={{
+          maxWidth: "400px",
+          backgroundColor: mode === "dark" ? "#1e1e1e" : "#ffffff",
+        }}
+      >
+        <h2 className="text-center mb-4">{title}</h2>
+        {children}
+        {footer && (
+          <div className="text-center mt-4">
+            <small
+              className={mode === "dark" ? "text-light" : "text-secondary"}
+            >
+              {footer.includes("Login") ? (
+                <>
+                  {footer.split("Login")[0]}
+                  <Link to="/login" className="ms-1">
+                    Login instead
+                  </Link>
+                </>
+              ) : (
+                <>
+                  {footer.split("Signup")[0]}
+                  <Link to="/signup" className="ms-1">
+                    Sign up now!
+                  </Link>
+                </>
+              )}
+            </small>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AuthCard;
+
+components/AuthCard.css
+import React, { useContext } from "react";
+import ThemeContext from "../Context/theme/ThemeContext";
+import { Link } from "react-router-dom";
+
+const AuthCard = ({ title, children, footer }) => {
+  const { mode } = useContext(ThemeContext);
+
+  return (
+    <div
+      className={`d-flex justify-content-center align-items-center vh-100 ${
+        mode === "dark" ? "bg-dark text-light" : "bg-light text-dark"
+      }`}
+    >
+      <div
+        className={`card shadow p-4 rounded-4 w-100 mx-3`}
+        style={{
+          maxWidth: "400px",
+          backgroundColor: mode === "dark" ? "#1e1e1e" : "#ffffff",
+        }}
+      >
+        <h2 className="text-center mb-4">{title}</h2>
+        {children}
+        {footer && (
+          <div className="text-center mt-4">
+            <small
+              className={mode === "dark" ? "text-light" : "text-secondary"}
+            >
+              {footer.includes("Login") ? (
+                <>
+                  {footer.split("Login")[0]}
+                  <Link to="/login" className="ms-1">
+                    Login instead
+                  </Link>
+                </>
+              ) : (
+                <>
+                  {footer.split("Signup")[0]}
+                  <Link to="/signup" className="ms-1">
+                    Sign up now!
+                  </Link>
+                </>
+              )}
+            </small>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default AuthCard;
+
+
+components/ForgotPassword.js
+
+import React, { useState, useContext, useEffect } from "react";
+import AuthCard from "./AuthCard";
+import ThemeContext from "../Context/theme/ThemeContext";
+
+const ForgotPassword = () => {
+  useEffect(() => {
+  document.title = "Login | NovaBook";
+}, []);
+  const [email, setEmail] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { mode } = useContext(ThemeContext);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      const res = await fetch("http://localhost:5000/api/auth/forgot-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ email })
+      });
+
+      const json = await res.json();
+
+      if (json.success || json.message) {
+        setSubmitted(true);
+      } else {
+        alert(json.error || "Something went wrong.");
+      }
+    } catch (error) {
+      console.error("Forgot Password Error:", error);
+      alert("Server error. Try again later.");
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <AuthCard title="Forgot Password?">
+      {submitted ? (
+        <div className="alert alert-success text-center">
+          If your email is registered, you’ll receive a reset link shortly.
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="email" className="form-label">Email address</label>
+            <input
+              id="email"
+              type="email"
+              className={`form-control rounded ${mode === "dark" ? "bg-dark text-light border-secondary" : ""}`}
+              placeholder="Enter your registered email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <button className="btn btn-primary w-100 mt-3" disabled={loading}>
+            {loading ? "Sending..." : "Send Reset Link"}
+          </button>
+        </form>
+      )}
+    </AuthCard>
+  );
+};
+
+export default ForgotPassword;
+
+
+components/Alert.js
+import React from 'react';
+
+function Alert(props) {
+  const capitalize = (word) => {
+    if(word === "danger") {
+      word = "error";
+    }
+    if (!word) return "";
+    return word[0].toUpperCase() + word.slice(1);
+  };
+
+  return (
+    props.alert && (
+      <div style={{ height: '50px' }}>
+        <div className={`alert alert-${props.alert.type} alert-dismissible fade show`} role="alert">
+          <strong>{capitalize(props.alert.type)}</strong>: {props.alert.msg}
+        </div>
+      </div>
+    )
+  );
+}
+
+export default Alert;
+
+
+
+components/Home.js
+import React, { useEffect, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import notecontext from "../Context/notes/noteContext";
+import Notes from "./Notes";
+
+const Home = (props) => {
+  const navigate = useNavigate();
+  const context = useContext(notecontext);
+  const { getNotes } = context;
+
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      props.showAlert("Please login to continue", "danger");
+      navigate("/login");
+    } else {
+      getNotes();
+    }
+    // eslint-disable-next-line
+  }, []);
+
+  // Do NOT render Notes if not authenticated
+  if (!localStorage.getItem("token")) {
+    return null;
+  }
+
+  return (
+    <div>
+      <Notes showAlert={props.showAlert} />
+    </div>
+  );
+};
+
+export default Home;
+
+
+
+components/LandingPage.js
+import React, { useContext,useEffect } from "react";
+import ThemeContext from "../Context/theme/ThemeContext";
+import { Link } from "react-router-dom";
+import AOS from 'aos';
+import 'aos/dist/aos.css';
+// import './LandingPage.css';
+
+
+const LandingPage = () => {
+  const { mode } = useContext(ThemeContext);
+
+  useEffect(() => {
+    AOS.init({ duration: 1000 });
+  }, []);
+
+
+  return (
+    <div className={`landing-page ${mode}`}>
+      {/* Hero Section */}
+      <section className="hero py-5 text-center">
+        <div className="container">
+          <h1 className="display-4">Welcome to NovaBook</h1>
+          <p className="lead">Your secure cloud-based notebook, accessible anywhere, anytime.</p>
+          <div className="d-flex justify-content-center gap-3 mt-4">
+            <Link to="/signup" className="btn btn-primary btn-lg">Get Started</Link>
+            <Link to="/login" className="btn btn-outline-light btn-lg">Login</Link>
+          </div>
+        </div>
+      </section>
+
+
+
+      <section id="features" className="py-5 bg-light text-dark">
+        <div className="container">
+          <h2 className="text-center mb-4" data-aos="fade-up">Features</h2>
+          <div className="row text-center">
+            <div className="col-md-4" data-aos="flip-left">
+              <i className="fas fa-lock fa-3x mb-3"></i>
+              <h4>Secure</h4>
+              <p>Your notes are safe and encrypted using JWT authentication.</p>
+            </div>
+            <div className="col-md-4" data-aos="flip-up">
+              <i className="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+              <h4>Cloud Based</h4>
+              <p>Access your notes from any device, anywhere in the world.</p>
+            </div>
+            <div className="col-md-4" data-aos="flip-right">
+              <i className="fas fa-bolt fa-3x mb-3"></i>
+              <h4>Fast & Simple</h4>
+              <p>Clean, minimal UI that keeps you focused on your thoughts.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="py-5">
+        <div className="container">
+          <h2 className="text-center mb-4" data-aos="fade-up">About NovaBook</h2>
+          <p className="text-center" data-aos="fade-in">
+            NovaBook is designed for professionals, students, and thinkers who want their notes to be available
+            anytime, with maximum simplicity and privacy. Built with React, Node.js, and MongoDB.
+          </p>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contact" className="py-5 bg-dark text-light">
+        <div className="container text-center">
+          <h2 className="mb-4" data-aos="fade-up">Contact</h2>
+          <p>Email: support@novabook.com</p>
+          <p>© {new Date().getFullYear()} NovaBook. All rights reserved.</p>
+          <div className="mt-3" data-aos="zoom-in">
+            <a href="https://twitter.com" className="text-light mx-2"><i className="fab fa-twitter fa-lg"></i></a>
+            <a href="https://github.com" className="text-light mx-2"><i className="fab fa-github fa-lg"></i></a>
+            <a href="https://linkedin.com" className="text-light mx-2"><i className="fab fa-linkedin fa-lg"></i></a>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default LandingPage;
+
+components/LandingPage.css
+/* src/components/LandingPage.css */
+
+.landing-page {
+  padding: 50px 20px;
+  text-align: center;
+  color: var(--fg);
+  background-color: var(--bg);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+.hero-section h1 {
+  font-size: 3rem;
+  margin-bottom: 10px;
+}
+
+.hero-section p {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  color: var(--form-text-color);
+}
+
+.highlight {
+  color: var(--primary);
+}
+
+.hero-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 12px 30px;
+  border-radius: 5px;
+  font-size: 1rem;
+  text-decoration: none;
+  transition: background-color 0.3s ease;
+}
+
+.btn-primary {
+  background-color: var(--primary);
+  color: white;
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--primary);
+  border: 2px solid var(--primary);
+}
+
+.btn-primary:hover,
+.btn-secondary:hover {
+  opacity: 0.9;
+}
+
+.features-section {
+  margin-top: 60px;
+}
+
+.features {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+  margin-top: 30px;
+}
+
+.feature-card {
+  background-color: var(--card-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 20px;
+  border-radius: 10px;
+  width: 250px;
+  transition: transform 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+}
+
+
+
+components/Login.js
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import AuthCard from "./AuthCard";
+import "./AuthCard.css";
+
+const Login = (props) => {
+  useEffect(() => {
+    document.title = "Login | NovaBook";
+  }, []);
+
+  const [credentials, setCredentials] = useState({ email: "", password: "" });
+  const [loading, setLoading] = useState(false); // ✅ Loading state
+  const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setLoading(true); // ⏳ Start loading
+
+    try {
+      const url = `http://localhost:5000/api/auth/login`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: credentials.email,
+          password: credentials.password,
+        }),
+      });
+
+      const json = await response.json();
+      setLoading(false); // ✅ End loading
+
+      if (json.success) {
+        localStorage.setItem("token", json.authtoken);
+        props.showAlert("Logged in successfully", "success");
+        navigate("/dashboard");
+      } else {
+        props.showAlert("Invalid credentials", "danger");
+      }
+    } catch (error) {
+      setLoading(false);
+      props.showAlert("Something went wrong. Please try again.", "danger");
+    }
+  };
+
+  const onChange = (e) =>
+    setCredentials({ ...credentials, [e.target.name]: e.target.value });
+
+  return (
+    <AuthCard title="Login to NovaBook" footer="Don't have an account?">
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Email address</label>
+          <input
+            type="email"
+            name="email"
+            className="form-control rounded"
+            placeholder="Enter email"
+            value={credentials.email}
+            onChange={onChange}
+            required
+          />
+        </div>
+
+        <div className="form-group mt-3">
+          <label>Password</label>
+          <input
+            type={showPassword ? "text" : "password"}
+            className="form-control"
+            value={credentials.password}
+            onChange={onChange}
+            name="password"
+            placeholder="Password"
+            required
+          />
+          <div className="form-check mt-2">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="showPasswordCheck"
+              onChange={() => setShowPassword(!showPassword)}
+            />
+            <label className="form-check-label" htmlFor="showPasswordCheck">
+              Show Password
+            </label>
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="btn btn-primary w-100 mt-4"
+          disabled={loading} // 🚫 Prevent double clicks
+        >
+          {loading ? (
+            <>
+              <span
+                className="spinner-border spinner-border-sm me-2"
+                role="status"
+              ></span>
+              Logging in...
+            </>
+          ) : (
+            "Login"
+          )}
+        </button>
+
+        <div className="text-end">
+          <a href="/forgot-password" className="small">
+            Forgot Password?
+          </a>
+        </div>
+      </form>
+    </AuthCard>
+  );
+};
+
+export default Login;
+
+
+
+
+
+components/Navbar.js
+import React, { useContext } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import ThemeContext from "../Context/theme/ThemeContext";
+
+const Navbar = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const isLoggedIn = localStorage.getItem("token");
+  const { mode, toggleMode } = useContext(ThemeContext);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
+
+  return (
+    <nav
+      className={`navbar navbar-expand-lg ${
+        mode === "dark" ? "navbar-dark bg-dark" : "navbar-light bg-light"
+      }`}
+    >
+      <div className="container-fluid">
+        <Link className="navbar-brand" to="/">
+          NovaBook
+        </Link>
+        <button
+          className="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
+          <span className="navbar-toggler-icon"></span>
+        </button>
+
+        <div className="collapse navbar-collapse" id="navbarNav">
+          <ul className="navbar-nav me-auto mb-2 mb-lg-0">
+            {!isLoggedIn ? (
+              <>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link ${
+                      location.pathname === "/" ? "active" : ""
+                    }`}
+                    to="/"
+                  >
+                    Home
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link ${
+                      location.pathname === "/about" ? "active" : ""
+                    }`}
+                    to="/about"
+                  >
+                    About
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <a className="nav-link" href="#features">
+                    Features
+                  </a>
+                </li>
+                <li className="nav-item">
+                  <a className="nav-link" href="#contact">
+                    Contact
+                  </a>
+                </li>
+              </>
+            ) : (
+              <>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link ${
+                      location.pathname === "/dashboard" ? "active" : ""
+                    }`}
+                    to="/dashboard"
+                  >
+                    Dashboard
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link ${
+                      location.pathname === "/about" ? "active" : ""
+                    }`}
+                    to="/about"
+                  >
+                    About
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link ${
+                      location.pathname === "/trash" ? "active" : ""
+                    }`}
+                    to="/trash"
+                  >
+                    🗑️ Trash
+                  </Link>
+                </li>
+              </>
+            )}
+          </ul>
+
+          <div className="d-flex align-items-center">
+            <div className="form-check form-switch me-3">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                onChange={toggleMode}
+                id="themeSwitch"
+                checked={mode === "dark"}
+              />
+              <label className="form-check-label" htmlFor="themeSwitch">
+                {mode === "dark" ? "Dark" : "Light"} Mode
+              </label>
+            </div>
+
+            {!isLoggedIn ? (
+              <Link className="btn btn-outline-primary" to="/signup">
+                Get Started
+              </Link>
+            ) : (
+              <button className="btn btn-outline-danger" onClick={handleLogout}>
+                Logout
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+};
+
+export default Navbar;
+
+
+
+components\NoteItem.js
+import { useContext } from "react";
+import notecontext from "../Context/notes/noteContext";
+import ThemeContext from "../Context/theme/ThemeContext";
+import moment from "moment";
+
+const NoteItem = (props) => {
+  const { trashNote } = useContext(notecontext);
+  const { note, updateNotes, togglePin, onPreviewClick, showAlert } = props;
+  const { mode } = useContext(ThemeContext);
+
+  return (
+    <div className="col-md-4 mb-4">
+      <div
+        className={`card shadow-sm h-100 ${mode === "dark" ? "bg-dark text-light" : "bg-white text-dark"}`}
+        onClick={() => onPreviewClick(note)} 
+        style={{ cursor: "pointer" }}
+      >
+        <div className="card-body">
+          <h5 className="card-title">{note.title}</h5>
+          <p className="card-text">
+            {note.description.length > 35
+              ? note.description.slice(0, 35) + "..."
+              : note.description}
+          </p>
+
+          <span className="badge bg-info text-dark">
+            {note.tag || "General"}
+          </span>
+
+          <p className="text-muted mb-1">
+            <small>Last updated: {moment(note.date).fromNow()}</small>
+          </p>
+
+          <div className="d-flex justify-content-end">
+            <i
+              className={`fas fa-thumbtack mx-2 ${
+                note.pinned ? "text-warning" : mode === "dark" ? "text-light" : "text-muted"
+              }`}
+              title={note.pinned ? "Unpin" : "Pin"}
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePin(note);
+              }}
+            ></i>
+
+            <i
+              className="fas fa-pen text-primary me-3"
+              title="Edit Note"
+              onClick={(e) => {
+                e.stopPropagation(); 
+                updateNotes(note);
+              }}
+            ></i>
+
+            <i
+              className="fas fa-trash text-danger"
+              title="Move to Trash"
+              onClick={(e) => {
+                e.stopPropagation(); 
+                trashNote(note._id);
+                showAlert("Moved to Trash", "warning");
+              }}
+            ></i>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default NoteItem;
+
+components/NotePreviewModal.js
+import React from "react";
+import moment from "moment";
+
+const NotePreviewModal = ({ note, mode }) => {
+  if (!note) return null;
+
+  return (
+    <div
+      className="modal fade"
+      id="notePreviewModal"
+      tabIndex="-1"
+      aria-labelledby="notePreviewModalLabel"
+      aria-hidden="true"
+    >
+      <div className="modal-dialog modal-dialog-centered">
+        <div className={`modal-content ${mode === "dark" ? "bg-dark text-light" : ""}`}>
+          <div className="modal-header">
+            <h5 className="modal-title" id="notePreviewModalLabel">📝 Note Preview</h5>
+            <button
+              type="button"
+              className="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div className="modal-body">
+            <h4>{note.title}</h4>
+            <p className="mt-3">{note.description}</p>
+            <hr />
+            <p><strong>Tag:</strong> {note.tag || "General"}</p>
+            <p><strong>Created:</strong> {moment(note.date).format("LLL")}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default NotePreviewModal;
+
+
+components/Notes.js
+import React, { useContext, useEffect, useRef, useState } from "react";
+import notecontext from "../Context/notes/noteContext";
+import NoteItem from "./NoteItem";
+import AddNote from "./AddNote";
+import ThemeContext from "../Context/theme/ThemeContext";
+import SkeletonCard from "./SkeletonCard";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
+import NotePreviewModal from "./NotePreviewModal";
+
+const Notes = (props) => {
+  useEffect(() => {
+    document.title = "Whatever Title | NovaBook";
+  }, []);
+
+  const context = useContext(notecontext);
+  const [selectedTag, setSelectedTag] = useState("All");
+  const { notes, getNotes, editNote } = context;
+  const { mode } = useContext(ThemeContext);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sortOption, setSortOption] = useState("date-desc");
+  const [selectedNote, setSelectedNote] = useState(null);
+
+  useEffect(() => {
+    if (selectedNote) {
+      const modal = new window.bootstrap.Modal(
+        document.getElementById("notePreviewModal")
+      );
+      modal.show();
+    }
+  }, [selectedNote]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (localStorage.getItem("token")) {
+        setLoading(true);
+        await getNotes();
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const ref = useRef(null);
+  const refClose = useRef(null);
+
+  const [note, setNote] = useState({
+    id: "",
+    etitle: "",
+    edescription: "",
+    etag: "",
+    epinned: false,
+  });
+
+  const updateNotes = (currentnote) => {
+    ref.current.click();
+    setNote({
+      id: currentnote._id,
+      etitle: currentnote.title,
+      edescription: currentnote.description,
+      etag: currentnote.tag,
+      epinned: currentnote.pinned,
+    });
+  };
+
+  const handleClick = (e) => {
+    editNote(note.id, note.etitle, note.edescription, note.etag, note.epinned);
+    refClose.current.click();
+    e.preventDefault();
+    props.showAlert("Note Updated Successfully", "success");
+  };
+
+  const onchange = (e) => {
+    setNote({ ...note, [e.target.name]: e.target.value });
+  };
+
+  // Filter notes by title or description
+  // Filter by both tag and search
+  const filteredNotes = notes
+    .filter((note) => !note.trashed) // 👈 hide trashed notes
+    .filter((note) => {
+      const matchesSearch = (note.title + note.description)
+        .toLowerCase()
+        .includes(search.toLowerCase());
+
+      const matchesTag = selectedTag === "All" || note.tag === selectedTag;
+
+      return matchesSearch && matchesTag;
+    });
+
+  const sortedNotes = [...filteredNotes].sort((a, b) => {
+    if (sortOption === "date-desc") return new Date(b.date) - new Date(a.date);
+    if (sortOption === "date-asc") return new Date(a.date) - new Date(b.date);
+    if (sortOption === "title-asc") return a.title.localeCompare(b.title);
+    if (sortOption === "title-desc") return b.title.localeCompare(a.title);
+    return 0;
+  });
+
+  const pinnedNotes = sortedNotes.filter((note) => note.pinned);
+  const unpinnedNotes = sortedNotes.filter((note) => !note.pinned);
+
+  const togglePin = (note) => {
+    editNote(note._id, note.title, note.description, note.tag, !note.pinned);
+  };
+  const isEmpty =
+    pinnedNotes.length === 0 && unpinnedNotes.length === 0 && !loading;
+
+  const downloadBlob = (blob, filename) => {
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+  const handleNoteClick = (note) => {
+    setSelectedNote(null); // Reset first to force change
+    setTimeout(() => {
+      setSelectedNote(note);
+    }, 0); // Small delay to allow re-render
+  };
+
+  const handleExportTxt = () => {
+    const content = notes
+      .filter((note) => !note.trashed)
+      .map(
+        (note, i) =>
+          `Note ${i + 1}:\nTitle: ${note.title}\nDescription: ${
+            note.description
+          }\nTag: ${note.tag}\n\n`
+      )
+      .join("");
+
+    const blob = new Blob([content], { type: "text/plain" });
+    downloadBlob(blob, "mynotes.txt");
+  };
+
+  const handleExportJson = () => {
+    const filtered = notes.filter((note) => !note.trashed);
+    const blob = new Blob([JSON.stringify(filtered, null, 2)], {
+      type: "application/json",
+    });
+    downloadBlob(blob, "mynotes.json");
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    const filteredNotes = notes.filter((note) => !note.trashed);
+
+    doc.setFontSize(18);
+    doc.text("My Notes", 14, 20);
+
+    const tableData = filteredNotes.map((note, i) => [
+      i + 1,
+      note.title,
+      note.description,
+      note.tag || "General",
+      new Date(note.date).toLocaleDateString(),
+    ]);
+
+    autoTable(doc, {
+      startY: 30,
+      head: [["#", "Title", "Description", "Tag", "Date"]],
+      body: tableData,
+      styles: {
+        fontSize: 10,
+        cellPadding: 3,
+      },
+      headStyles: {
+        fillColor: [52, 58, 64],
+      },
+    });
+
+    doc.save("mynotes.pdf");
+  };
+
+  return (
+    <div>
+      <AddNote showAlert={props.showAlert} />
+
+      <div className="container my-3">
+        <div className="row mb-3">
+          <div className="col-md-3">
+            <select
+              className={`form-select ${
+                mode === "dark" ? "bg-dark text-light border-secondary" : ""
+              }`}
+              value={selectedTag}
+              onChange={(e) => setSelectedTag(e.target.value)}
+            >
+              <option value="All">All Tags</option>
+              {[
+                ...new Set(
+                  notes
+                    .filter((note) => !note.trashed) // 👈 filter out trashed notes
+                    .map((note) => note.tag)
+                ),
+              ]
+                .filter((tag) => tag) // Optional: remove empty tags
+                .map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div className="col-md-3">
+            <select
+              className={`form-select ${
+                mode === "dark" ? "bg-dark text-light border-secondary" : ""
+              }`}
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value)}
+            >
+              <option value="date-desc">🕒 Newest First</option>
+              <option value="date-asc">🕒 Oldest First</option>
+              <option value="title-asc">🔤 A-Z</option>
+              <option value="title-desc">🔤 Z-A</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Hidden Modal Trigger Button */}
+      <button
+        type="button"
+        className="btn btn-primary d-none"
+        ref={ref}
+        data-bs-toggle="modal"
+        data-bs-target="#exampleModal"
+      >
+        Launch demo modal
+      </button>
+
+      {/* Modal */}
+      <div
+        className="modal fade"
+        id="exampleModal"
+        tabIndex="-1"
+        aria-labelledby="exampleModalLabel"
+        aria-hidden="true"
+      >
+        <div className="modal-dialog">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h1 className="modal-title fs-5" id="exampleModalLabel">
+                Edit Your Note
+              </h1>
+              <button
+                type="button"
+                className="btn-close"
+                data-bs-dismiss="modal"
+                aria-label="Close"
+              ></button>
+            </div>
+            <div className="modal-body">
+              <form className="My-3">
+                <div className="mb-3">
+                  <label htmlFor="title" className="form-label">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={note.etitle}
+                    className="form-control"
+                    id="etitle"
+                    name="etitle"
+                    onChange={onchange}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="description" className="form-label">
+                    Description
+                  </label>
+                  <input
+                    type="text"
+                    value={note.edescription}
+                    className="form-control"
+                    id="edescription"
+                    name="edescription"
+                    onChange={onchange}
+                  />
+                </div>
+                <div className="mb-3">
+                  <label htmlFor="tag" className="form-label">
+                    Tag
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={note.etag}
+                    id="etag"
+                    name="etag"
+                    onChange={onchange}
+                  />
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                data-bs-dismiss="modal"
+                ref={refClose}
+              >
+                Close
+              </button>
+              <button
+                disabled={
+                  note.etitle.length < 5 || note.edescription.length < 5
+                }
+                type="button"
+                onClick={handleClick}
+                className="btn btn-primary"
+              >
+                Save changes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Search Bar */}
+      <div className="container my-3">
+        <input
+          type="text"
+          className="form-control mb-4"
+          placeholder="🔍 Search notes by title or description..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+
+        <div className="d-flex justify-content-between align-items-center mb-3">
+  <h2 className="mb-0">Your Notes</h2>
+        <div className="dropdown text-end mb-3">
+          <button
+            className="btn btn-outline-secondary dropdown-toggle"
+            type="button"
+            id="downloadDropdown"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+          >
+            ⬇️ Download Notes
+          </button>
+          <ul className="dropdown-menu" aria-labelledby="downloadDropdown">
+            <li>
+              <button className="dropdown-item" onClick={handleExportTxt}>
+                📄 Export as .txt
+              </button>
+            </li>
+            <li>
+              <button className="dropdown-item" onClick={handleExportJson}>
+                🧾 Export as .json
+              </button>
+            </li>
+            <li>
+              <button className="dropdown-item" onClick={handleExportPDF}>
+                📚 Export as .pdf
+              </button>
+            </li>
+          </ul>
+        </div>
+        </div>
+
+        <div className="row my-3">
+          {isEmpty && (
+            <>
+              <img
+                src="https://cdn-icons-png.flaticon.com/512/4076/4076500.png"
+                alt="Empty"
+                style={{ width: "120px", opacity: 0.5 }}
+              />
+              <h5 className="mt-3">No notes found</h5>
+              <p className="text-muted">Create your first note above.</p>
+            </>
+          )}
+
+          {/* Pinned Notes */}
+          {pinnedNotes.length > 0 && (
+            <>
+              <h4 className="mt-4">📌 Pinned</h4>
+              {loading ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : (
+                pinnedNotes.map((note) => (
+                  <NoteItem
+                    key={note._id}
+                    note={note}
+                    updateNotes={updateNotes}
+                    showAlert={props.showAlert}
+                    togglePin={togglePin}
+                    mode={mode}
+                    onPreviewClick={handleNoteClick}
+                  />
+                ))
+              )}
+            </>
+          )}
+
+          {/* Unpinned Notes */}
+          {unpinnedNotes.length > 0 && (
+            <>
+              <h4 className="mt-4">🗂️ Others</h4>
+              {loading ? (
+                <>
+                  <SkeletonCard />
+                  <SkeletonCard />
+                  <SkeletonCard />
+                </>
+              ) : (
+                unpinnedNotes.map((note) => (
+                  <NoteItem
+                    key={note._id}
+                    note={note}
+                    updateNotes={updateNotes}
+                    showAlert={props.showAlert}
+                    togglePin={togglePin}
+                    onPreviewClick={handleNoteClick}
+                  />
+                ))
+              )}
+            </>
+          )}
+        </div>
+        <NotePreviewModal note={selectedNote} mode={mode} />
+      </div>
+    </div>
+  );
+};
+
+export default Notes;
+
+
+
+
+components\ProtectedRoute.js
+import React from 'react';
+import { Navigate } from 'react-router-dom';
+
+const ProtectedRoute = ({ children }) => {
+  const token = localStorage.getItem("token");
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
+};
+
+export default ProtectedRoute;
+
+
+components\ResetPassword.js
+import React, { useState, useContext, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import AuthCard from "./AuthCard";
+import ThemeContext from "../Context/theme/ThemeContext";
+
+const ResetPassword = () => {
+  useEffect(() => {
+    document.title = "Login | NovaBook";
+  }, []);
+
+  const { token } = useParams();
+  const navigate = useNavigate();
+  const { mode } = useContext(ThemeContext);
+
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleReset = async (e) => {
+    e.preventDefault();
+
+    if (password !== confirm) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    try {
+      setLoading(true); // Start spinner
+      const response = await fetch(
+        `http://localhost:5000/api/auth/reset-password/${token}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ password }),
+        }
+      );
+
+      const json = await response.json();
+      setLoading(false); // Stop spinner
+
+      if (json.message) {
+        setMessage(json.message);
+        setTimeout(() => navigate("/login"), 2000);
+      } else {
+        setError(json.error || "Something went wrong");
+      }
+    } catch (err) {
+      setLoading(false);
+      setError("Failed to reset password. Please try again.");
+    }
+  };
+
+  return (
+    <AuthCard title="🔑 Reset Your Password">
+      {error && <div className="alert alert-danger text-center">{error}</div>}
+      {message && (
+        <div className="alert alert-success text-center">{message}</div>
+      )}
+
+      <form onSubmit={handleReset}>
+        <div className="form-group mt-3">
+          <label>New Password</label>
+          <input
+            type="password"
+            className={`form-control rounded ${
+              mode === "dark" ? "bg-dark text-light border-secondary" : ""
+            }`}
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            minLength={5}
+          />
+        </div>
+
+        <div className="form-group mt-3">
+          <label>Confirm Password</label>
+          <input
+            type="password"
+            className={`form-control rounded ${
+              mode === "dark" ? "bg-dark text-light border-secondary" : ""
+            }`}
+            required
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            minLength={5}
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="btn btn-primary w-100 mt-4"
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2"></span>
+              Resetting...
+            </>
+          ) : (
+            "Reset Password"
+          )}
+        </button>
+      </form>
+    </AuthCard>
+  );
+};
+
+export default ResetPassword;
+
+
+
+components/Singup.js
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import AuthCard from "./AuthCard";
+import "./AuthCard.css";
+
+const passwordChecks = (password) => {
+  return {
+    length: password.length >= 6,
+    uppercase: /[A-Z]/.test(password),
+    lowercase: /[a-z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
+};
+
+const getPasswordStrength = (password) => {
+  let strength = 0;
+  if (password.length >= 6) strength += 1;
+  if (/[A-Z]/.test(password)) strength += 1;
+  if (/[0-9]/.test(password)) strength += 1;
+  if (/[^A-Za-z0-9]/.test(password)) strength += 1;
+
+  if (strength === 0) return { label: "", color: "" };
+  if (strength <= 1) return { label: "Weak", color: "danger" };
+  if (strength === 2) return { label: "Fair", color: "warning" };
+  if (strength >= 3) return { label: "Strong", color: "success" };
+};
+
+const Signup = (props) => {
+  useEffect(() => {
+    document.title = "Login | NovaBook";
+  }, []);
+  const [credentials, setCredentials] = useState({
+    name: "",
+    email: "",
+    password: "",
+    cpassword: "",
+  });
+
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const passwordsMatch = credentials.password === credentials.cpassword;
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
+  const isPasswordStrong = Object.values(
+    passwordChecks(credentials.password)
+  ).every(Boolean);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!passwordsMatch) {
+      props.showAlert("Passwords do not match", "danger");
+      return;
+    }
+
+    try {
+      setLoading(true); // 🔄 Start loading
+      const url = `http://localhost:5000/api/auth/createuser`;
+      const { name, email, password } = credentials;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      const json = await response.json();
+      setLoading(false); // ✅ Stop loading
+
+      if (json.success) {
+        localStorage.setItem("token", json.authtoken);
+        props.showAlert("Successfully Signed up", "success");
+        navigate("/dashboard");
+      } else {
+        props.showAlert("Invalid credentials", "danger");
+      }
+    } catch (err) {
+      setLoading(false);
+      props.showAlert("Something went wrong", "danger");
+    }
+  };
+
+  const onChange = (e) =>
+    setCredentials({ ...credentials, [e.target.name]: e.target.value });
+
+  return (
+    <AuthCard
+      title="Create an Account"
+      footer="Already have an account? Login instead."
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="form-group">
+          <label>Name</label>
+          <input
+            type="text"
+            name="name"
+            className="form-control rounded"
+            placeholder="Enter your name"
+            value={credentials.name}
+            onChange={onChange}
+            required
+          />
+        </div>
+
+        <div className="form-group mt-3">
+          <label>Email address</label>
+          <input
+            type="email"
+            name="email"
+            className="form-control rounded"
+            placeholder="Enter email"
+            value={credentials.email}
+            onChange={onChange}
+            required
+          />
+        </div>
+
+        <div className="form-group mt-3">
+          <label>Password</label>
+          <input
+            type="password"
+            name="password"
+            className="form-control rounded"
+            placeholder="Create password"
+            value={credentials.password}
+            onChange={onChange}
+            minLength={5}
+            required
+          />
+        </div>
+        {credentials.password && (
+          <span
+            className={`badge bg-${
+              getPasswordStrength(credentials.password).color
+            }`}
+          >
+            {getPasswordStrength(credentials.password).label} Password
+          </span>
+        )}
+
+        {credentials.password && (
+          <ul className="list-unstyled small mt-2">
+            {Object.entries(passwordChecks(credentials.password)).map(
+              ([key, passed]) => (
+                <li
+                  key={key}
+                  className={passed ? "text-success" : "text-danger"}
+                >
+                  <i
+                    className={`me-1 fas fa-${passed ? "check" : "times"}`}
+                  ></i>
+                  {key === "length" && "Minimum 6 characters"}
+                  {key === "uppercase" && "One uppercase letter"}
+                  {key === "lowercase" && "One lowercase letter"}
+                  {key === "number" && "One number"}
+                  {key === "special" && "One special character"}
+                </li>
+              )
+            )}
+          </ul>
+        )}
+
+        <div className="form-group mt-3">
+          <label>Confirm Password</label>
+          <input
+            type={showConfirmPassword ? "text" : "password"}
+            name="cpassword"
+            className={`form-control rounded ${
+              credentials.cpassword && !passwordsMatch ? "is-invalid" : ""
+            }`}
+            placeholder="Confirm password"
+            value={credentials.cpassword}
+            onChange={onChange}
+            minLength={5}
+            required
+          />
+          {!passwordsMatch && credentials.cpassword && (
+            <div className="invalid-feedback">Passwords do not match</div>
+          )}
+        </div>
+
+        <div className="form-check mt-2">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            id="showConfirmPasswordCheck"
+            checked={showConfirmPassword}
+            onChange={() => setShowConfirmPassword(!showConfirmPassword)}
+          />
+          <label
+            className="form-check-label"
+            htmlFor="showConfirmPasswordCheck"
+          >
+            Show Confirm Password
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          className="btn btn-success w-100 mt-4"
+          disabled={!passwordsMatch || loading || !isPasswordStrong}
+        >
+          {loading ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2"></span>
+              Signing Up...
+            </>
+          ) : (
+            "Sign Up"
+          )}
+        </button>
+      </form>
+    </AuthCard>
+  );
+};
+
+export default Signup;
+
+components\SkeletonCard.js
+// src/components/SkeletonCard.js
+import React from 'react';
+import Skeleton from 'react-loading-skeleton';
+import 'react-loading-skeleton/dist/skeleton.css';
+
+const SkeletonCard = () => {
+  return (
+    <div className="col-md-4 mb-4">
+      <div className="card shadow-sm h-100">
+        <div className="card-body">
+          <h5><Skeleton height={24} width={`80%`} /></h5>
+          <p><Skeleton count={3} /></p>
+          <Skeleton width={80} height={20} />
+          <div className="d-flex justify-content-end mt-2">
+            <Skeleton circle width={24} height={24} className="me-3" />
+            <Skeleton circle width={24} height={24} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default SkeletonCard;
+
+
+components\Trash.js
+// src/components/Trash.js
+import React, { useContext, useEffect } from "react";
+import noteContext from "../Context/notes/noteContext";
+import ThemeContext from "../Context/theme/ThemeContext";
+
+const Trash = ({ showAlert }) => {
+  useEffect(() => {
+    document.title = "Whatever Title | NovaBook";
+  }, []);
+
+  const { notes, getNotes, restoreNote, deleteForeverNote } =
+    useContext(noteContext);
+  const { mode } = useContext(ThemeContext);
+  const [showConfirm, setShowConfirm] = React.useState(false);
+  const [noteToDelete, setNoteToDelete] = React.useState(null);
+  const trashedNotes = notes.filter((note) => note.trashed);
+
+  useEffect(() => {
+    if (localStorage.getItem("token")) {
+      getNotes();
+    }
+  }, [getNotes]);
+
+  return (
+    <div className="container mt-5">
+      {showConfirm && (
+        <div
+          className="modal fade show d-block"
+          tabIndex="-1"
+          style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div
+              className={`modal-content ${
+                mode === "dark" ? "bg-dark text-light" : ""
+              }`}
+            >
+              <div className="modal-header">
+                <h5 className="modal-title text-danger">Delete Permanently?</h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowConfirm(false)}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p>
+                  Are you sure you want to permanently delete{" "}
+                  <strong>{noteToDelete?.title}</strong>?
+                </p>
+                <p className="text-muted small">
+                  This action cannot be undone.
+                </p>
+              </div>
+              <div className="modal-footer">
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setShowConfirm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => {
+                    deleteForeverNote(noteToDelete._id);
+                    showAlert("Note deleted permanently", "danger");
+                    setShowConfirm(false);
+                  }}
+                >
+                  Yes, Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <h2 className="mb-4">🗑️ Trashed Notes</h2>
+
+      {trashedNotes.length === 0 ? (
+        <p className="text-muted">Nothing in trash.</p>
+      ) : (
+        <div className="row">
+          {trashedNotes.map((note) => (
+            <div className="col-md-4 mb-3" key={note._id}>
+              <div
+                className={`card h-100 shadow-sm ${
+                  mode === "dark" ? "bg-dark text-light" : ""
+                }`}
+              >
+                <div className="card-body">
+                  <h5>{note.title}</h5>
+                  <p>{note.description}</p>
+                  <span className="badge bg-secondary">{note.tag}</span>
+                </div>
+                <div className="card-footer d-flex justify-content-between">
+                  <button
+                    className="btn btn-sm btn-outline-success"
+                    onClick={() => {
+                      restoreNote(note._id);
+                      showAlert("Note restored", "success");
+                    }}
+                  >
+                    ♻️ Restore
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-danger"
+                    onClick={() => {
+                      setNoteToDelete(note);
+                      setShowConfirm(true);
+                    }}
+                  >
+                    ❌ Delete Forever
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Trash;
+
+
+
+Context\notes\noteContext.js
+import { createContext } from "react";  
+
+const NoteContext = createContext();
+
+export default NoteContext;
+
+
+Context\notes\Notestate.js
+import React, { useState } from "react";
+import NoteContext from "./noteContext";
+
+const Notestate = (props) => {
+  const host = "http://localhost:5000";
+  const notesInitial = [];
+  const [notes, setNotes] = useState(notesInitial);
+
+  // get all note
+  const getNotes = async () => {
+    const url = `${host}/api/notes/fetchallnotes`;
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "auth-token":
+          localStorage.getItem("token"), // Assuming you store the token in localStorage
+      },
+    });
+    const json = await response.json();
+    setNotes(json);
+  };
+
+  // Add a note
+  const addNote = async (title, description, tag, pinned) => {
+    const url = `${host}/api/notes/addnote`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "auth-token":
+          localStorage.getItem("token"), // Assuming you store the token in localStorage
+      },
+      body: JSON.stringify({ title, description, tag, pinned}),
+    });
+
+    const note = await response.json(); // assuming backend returns the saved note
+    setNotes(notes.concat(note));
+  };
+
+  // Delete a note
+
+  const deleteNote = async (id) => {
+    const url = `${host}/api/notes/deletenote/${id}`;
+    const response = await fetch(url, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        "auth-token":
+          localStorage.getItem("token"), // Assuming you store the token in localStorage
+      },
+    });
+    await response.json();
+    const newNotes = notes.filter((note) => note._id !== id);
+    setNotes(newNotes);
+  };
+
+  // Edit a note
+  const editNote = async (id, title, description, tag, pinned = false) => {
+    const url = `${host}/api/notes/updatenote/${id}`;
+
+    const response = await fetch(url, {
+      method: "PUT", // Use PUT or PATCH for updates
+      headers: {
+        "Content-Type": "application/json",
+        "auth-token": localStorage.getItem("token"), // Assuming you store the token in localStorage,
+      },
+      body: JSON.stringify({ title, description, tag, pinned }),
+    });
+
+    await response.json();
+
+    // Now update the state locally only if server updated successfully
+    let newNotes = JSON.parse(JSON.stringify(notes));
+    for (let index = 0; index < newNotes.length; index++) {
+      const element = newNotes[index];
+      if (element._id === id) { 
+        newNotes[index].title = title;
+        newNotes[index].description = description;
+        newNotes[index].tag = tag;
+        newNotes[index].pinned = pinned;
+        break;
+      }
+    }
+    setNotes(newNotes);
+  };
+
+  // 🗑️ Move Note to Trash
+const trashNote = async (id) => {
+  const response = await fetch(`${host}/api/notes/trashnote/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "auth-token": localStorage.getItem("token"),
+    },
+  });
+  await response.json();
+  getNotes();
+};
+
+// ♻️ Restore Note from Trash
+const restoreNote = async (id) => {
+  const response = await fetch(`${host}/api/notes/restorenote/${id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "auth-token": localStorage.getItem("token"),
+    },
+  });
+  await response.json();
+  getNotes();
+};
+
+// ❌ Permanently Delete from Trash
+const deleteForeverNote = async (id) => {
+  const response = await fetch(`${host}/api/notes/deleteforever/${id}`, {
+    method: "DELETE",
+    headers: {
+      "Content-Type": "application/json",
+      "auth-token": localStorage.getItem("token"),
+    },
+  });
+  await response.json();
+  getNotes();
+};
+
+  return (
+    <NoteContext.Provider
+      value={{ notes, addNote, deleteNote, editNote, getNotes,trashNote, restoreNote, deleteForeverNote }}
+    >
+      {props.children}
+    </NoteContext.Provider>
+  );
+};
+export default Notestate;
+
+
+Context\theme\ThemeContext.js
+import React, { useState, createContext } from 'react';
+
+const ThemeContext = createContext();
+
+export const ThemeProvider = ({ children }) => {
+  const [mode, setMode] = useState('light');
+
+  const toggleMode = () => {
+    const newMode = mode === 'light' ? 'dark' : 'light';
+    setMode(newMode);
+
+    // Set <body> class
+    document.body.classList.toggle('dark', newMode === 'dark');
+  };
+
+  return (
+    <ThemeContext.Provider value={{ mode, toggleMode }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+export default ThemeContext;
+
+
+Context\theme\ThemeState.js
+import React, { useState, useEffect } from "react";
+import ThemeContext from "./ThemeContext";
+
+const ThemeState = (props) => {
+  // 🟢 Load initial mode from localStorage or default to 'light'
+  const [mode, setMode] = useState(() => localStorage.getItem("theme") || "light");
+
+  useEffect(() => {
+    // 🌓 Apply mode class to body
+    document.body.classList.toggle("dark", mode === "dark");
+    document.body.classList.toggle("light", mode === "light");
+
+    // 💾 Save to localStorage
+    localStorage.setItem("theme", mode);
+
+    // Apply color styles too
+    document.body.style.backgroundColor = mode === "dark" ? "#1f1f1f" : "white";
+    document.body.style.color = mode === "dark" ? "white" : "black";
+  }, [mode]);
+
+  const toggleMode = () => {
+    setMode((prevMode) => (prevMode === "light" ? "dark" : "light"));
+  };
+
+  return (
+    <ThemeContext.Provider value={{ mode, toggleMode }}>
+      {props.children}
+    </ThemeContext.Provider>
+  );
+};
+
+export default ThemeState;
+
+
+
+App.js
+  
+import React from "react";
+import "./App.css";
+import Navbar from "./components/Navbar";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import Home from "./components/Home";
+import About from "./components/About";
+import Notestate from "./Context/notes/Notestate";
+import Login from "./components/Login";
+import Signup from "./components/Signup";
+import ProtectedRoute from "./components/ProtectedRoute";
+import ThemeState from "./Context/theme/ThemeState";
+import LandingPage from "./components/LandingPage";
+import { ToastContainer, toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import ForgotPassword from "./components/ForgotPassword";
+import ResetPassword from "./components/ResetPassword";
+import Trash from "./components/Trash";
+
+function App() {
+  const typeMap = {
+    danger: "error", // handle Bootstrap's "danger" as Toastify's "error"
+    error: "error",
+    success: "success",
+    warning: "warning",
+    info: "info",
+  };
+
+  const showAlert = (message, type = "info") => {
+    const toastFunc = toast[typeMap[type] || "info"]; // fallback to "info" if type is invalid
+    toastFunc(message, {
+      position: "top-right",
+      autoClose: 2000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+      theme: "colored",
+    });
+  };
+
+  return (
+    <div>
+      <ThemeState>
+        <Notestate>
+          <Router>
+            <Navbar />
+            <Routes>
+              {/* <Route path="/" element={<LandingPage />} /> */}
+              <Route path="/about" element={<About />} />
+              <Route path="/login" element={<Login showAlert={showAlert} />} />
+              <Route
+                path="/signup"
+                element={<Signup showAlert={showAlert} />}
+              />
+              <Route path="/" element={<LandingPage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Home showAlert={showAlert} />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route
+                path="/reset-password/:token"
+                element={<ResetPassword />}
+              />
+              <Route
+                path="/trash"
+                element={
+                  <ProtectedRoute>
+                    <Trash showAlert={showAlert} />
+                  </ProtectedRoute>
+                }
+              />
+            </Routes>
+            
+            <ToastContainer />
+          </Router>
+        </Notestate>
+      </ThemeState>
+    </div>
+  );
+}
+
+export default App;
+
+App.css
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Theme Base */
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+a {
+  color: var(--primary);
+}
+
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  transition: transform 0.2s ease-in-out, box-shadow 0.3s ease, background-color 0.3s, color 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+/* Primary Button */
+.btn-primary {
+  background-color: var(--btn-bg) !important;
+  color: var(--btn-text) !important;
+  border-color: var(--btn-bg) !important;
+  transition: all 0.3s ease;
+}
+.btn-primary:hover {
+  background-color: #0b5ed7 !important;
+  border-color: #0a58ca !important;
+}
+
+/* Form Help Text */
+.form-text {
+  color: var(--form-text-color);
+  transition: color 0.3s ease;
+}
+
+/* Input Styling */
+input.form-control,
+textarea.form-control {
+  background-color: var(--input-bg);
+  color: var(--input-text-color);
+  border: 1px solid var(--input-border-color);
+  transition: all 0.3s ease;
+}
+
+input.form-control::placeholder,
+textarea.form-control::placeholder {
+  color: var(--input-placeholder-color);
+}
+
+/* Labels */
+label.form-label {
+  color: var(--label-color);
+  transition: color 0.3s ease;
+}
+
+/* Root - Light Theme */
+:root {
+  --bg: #f8f9fa;
+  --fg: #212529;
+  --card-bg: #ffffff;
+  --border: #ced4da;
+  --primary: #0d6efd;
+
+  --input-bg: #ffffff;
+  --input-text-color: #212529;
+  --input-border-color: #ced4da;
+  --input-placeholder-color: #6c757d;
+  --label-color: #212529;
+  --form-text-color: #6c757d;
+
+  --btn-bg: #0d6efd;
+  --btn-text: #ffffff;
+}
+
+/* Dark Theme Overrides */
+body.dark {
+  --bg: #1f1f1f;
+  --fg: #f8f9fa;
+  --card-bg: #2c2c2c;
+  --border: #444;
+  --primary: #66b2ff;
+
+  --input-bg: #2b2b2b;
+  --input-text-color: #f8f9fa;
+  --input-border-color: #444;
+  --input-placeholder-color: #aaa;
+  --label-color: #f1f1f1;
+  --form-text-color: #b5b5b5;
+
+  --btn-bg: #0d6efd;
+  --btn-text: #ffffff;
+}
+
+/* Modal Styling */
+.modal-content {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.3s ease;
+}
+body.dark .modal-content {
+  background-color: var(--card-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+body.dark .modal-header,
+body.dark .modal-footer {
+  border-color: var(--border);
+}
+body.dark .btn-close {
+  filter: invert(1);
+}
+
+.hero {
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  color: white;
+}
+
+.hero .btn {
+  font-weight: 600;
+}
+
+.landing-page.dark .hero {
+  background: linear-gradient(135deg, #222831, #393e46);
+}
+
+.landing-page.dark #features {
+  background-color: #222;
+  color: #eee;
+}
+
+.landing-page.dark #about {
+  background-color: #1a1a1a;
+  color: #ddd;
+}
+
+.landing-page.dark #contact {
+  background-color: #111;
+  color: #aaa;
+}
+.hero .btn-outline-light {
+  border-color: #fff;
+  color: #fff;
+}
+.hero .btn-outline-light:hover {
+  background-color: #fff;
+  color: #007bff;
+}
+html {
+  scroll-behavior: smooth;
+}
+body.dark .react-loading-skeleton {
+  --base-color: #333;
+  --highlight-color: #444;
+}
+
+

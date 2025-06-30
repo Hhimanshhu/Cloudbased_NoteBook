@@ -1,0 +1,198 @@
+.App {
+  text-align: center;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Theme Base */
+body {
+  background-color: var(--bg);
+  color: var(--fg);
+  transition: background-color 0.4s ease, color 0.4s ease;
+}
+
+a {
+  color: var(--primary);
+}
+
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  transition: transform 0.2s ease-in-out, box-shadow 0.3s ease, background-color 0.3s, color 0.3s;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+}
+/* Primary Button */
+.btn-primary {
+  background-color: var(--btn-bg) !important;
+  color: var(--btn-text) !important;
+  border-color: var(--btn-bg) !important;
+  transition: all 0.3s ease;
+}
+.btn-primary:hover {
+  background-color: #0b5ed7 !important;
+  border-color: #0a58ca !important;
+}
+
+/* Form Help Text */
+.form-text {
+  color: var(--form-text-color);
+  transition: color 0.3s ease;
+}
+
+/* Input Styling */
+input.form-control,
+textarea.form-control {
+  background-color: var(--input-bg);
+  color: var(--input-text-color);
+  border: 1px solid var(--input-border-color);
+  transition: all 0.3s ease;
+}
+
+input.form-control::placeholder,
+textarea.form-control::placeholder {
+  color: var(--input-placeholder-color);
+}
+
+/* Labels */
+label.form-label {
+  color: var(--label-color);
+  transition: color 0.3s ease;
+}
+
+/* Root - Light Theme */
+:root {
+  --bg: #f8f9fa;
+  --fg: #212529;
+  --card-bg: #ffffff;
+  --border: #ced4da;
+  --primary: #0d6efd;
+
+  --input-bg: #ffffff;
+  --input-text-color: #212529;
+  --input-border-color: #ced4da;
+  --input-placeholder-color: #6c757d;
+  --label-color: #212529;
+  --form-text-color: #6c757d;
+
+  --btn-bg: #0d6efd;
+  --btn-text: #ffffff;
+}
+
+/* Dark Theme Overrides */
+body.dark {
+  --bg: #1f1f1f;
+  --fg: #f8f9fa;
+  --card-bg: #2c2c2c;
+  --border: #444;
+  --primary: #66b2ff;
+
+  --input-bg: #2b2b2b;
+  --input-text-color: #f8f9fa;
+  --input-border-color: #444;
+  --input-placeholder-color: #aaa;
+  --label-color: #f1f1f1;
+  --form-text-color: #b5b5b5;
+
+  --btn-bg: #0d6efd;
+  --btn-text: #ffffff;
+}
+
+/* Modal Styling */
+.modal-content {
+  transition: background-color 0.4s ease, color 0.4s ease, border-color 0.3s ease;
+}
+body.dark .modal-content {
+  background-color: var(--card-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+body.dark .modal-header,
+body.dark .modal-footer {
+  border-color: var(--border);
+}
+body.dark .btn-close {
+  filter: invert(1);
+}
+
+.hero {
+  background: linear-gradient(135deg, #007bff, #6610f2);
+  color: white;
+}
+
+.hero .btn {
+  font-weight: 600;
+}
+
+.landing-page.dark .hero {
+  background: linear-gradient(135deg, #222831, #393e46);
+}
+
+.landing-page.dark #features {
+  background-color: #222;
+  color: #eee;
+}
+
+.landing-page.dark #about {
+  background-color: #1a1a1a;
+  color: #ddd;
+}
+
+.landing-page.dark #contact {
+  background-color: #111;
+  color: #aaa;
+}
+.hero .btn-outline-light {
+  border-color: #fff;
+  color: #fff;
+}
+.hero .btn-outline-light:hover {
+  background-color: #fff;
+  color: #007bff;
+}
+html {
+  scroll-behavior: smooth;
+}
+body.dark .react-loading-skeleton {
+  --base-color: #333;
+  --highlight-color: #444;
+}
+
+
