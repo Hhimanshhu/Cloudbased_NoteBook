@@ -77,7 +77,7 @@ const LandingPage = () => {
       <section id="contact" className="py-5 bg-dark text-light">
         <div className="container text-center">
           <h2 className="mb-4" data-aos="fade-up">Contact</h2>
-          <p>Email: support@novabook.com</p>
+          <p>Email: himanshumagar8088@gmail.com</p>
           <p>© {new Date().getFullYear()} NovaBook. All rights reserved.</p>
           <div className="mt-3" data-aos="zoom-in">
             <a href="https://twitter.com" className="text-light mx-2"><i className="fab fa-twitter fa-lg"></i></a>
