@@ -81,6 +81,7 @@ function App() {
           </Router>
         </Notestate>
       </ThemeState>
+      <SpeedInsights />
     </div>
   );
 }
