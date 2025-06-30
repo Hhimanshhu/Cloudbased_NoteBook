@@ -15,10 +15,22 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`navbar navbar-expand-lg ${
-        mode === "dark" ? "navbar-dark bg-dark" : "navbar-light bg-light"
-      }`}
-    >
+  className={`navbar navbar-expand-lg sticky-top shadow-sm ${
+    mode === "dark" ? "navbar-dark" : "navbar-light"
+  }`}
+  style={{
+    backgroundColor:
+      mode === "dark"
+        ? "rgba(33, 37, 41, 0.7)"
+        : "rgba(255, 255, 255, 0.6)",
+    backdropFilter: "blur(50px)",
+    WebkitBackdropFilter: "blur(50px)",
+    borderBottom:
+      mode === "dark"
+        ? "1px solid rgba(255,255,255,0.1)"
+        : "1px solid rgba(0,0,0,0.1)",
+  }}
+>
       <div className="container-fluid">
         <Link className="navbar-brand d-flex align-items-center" to="/">
           <img

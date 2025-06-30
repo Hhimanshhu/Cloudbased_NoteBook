@@ -49,7 +49,7 @@ const Signup = (props) => {
     navigate("/dashboard");
   }
   }, [navigate]);
-  
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 

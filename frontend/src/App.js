@@ -15,6 +15,7 @@ import "react-toastify/dist/ReactToastify.css";
 import ForgotPassword from "./components/ForgotPassword";
 import ResetPassword from "./components/ResetPassword";
 import Trash from "./components/Trash";
+import { SpeedInsights } from "@vercel/speed-insights/react"
 
 function App() {
   const typeMap = {

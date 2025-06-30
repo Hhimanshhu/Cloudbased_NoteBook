@@ -17,7 +17,7 @@ const Login = (props) => {
     }
   }, [navigate]);
 
-  
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);     //Start loading
