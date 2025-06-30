@@ -16,7 +16,7 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      const res = await fetch(`http://localhost:5000/api/auth/forgot-password`, {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -78,10 +78,6 @@ export default ForgotPassword;
 
 
 
-
-
-
-
 // import React, { useState, useContext, useEffect } from "react";
 // import AuthCard from "./AuthCard";
 // import ThemeContext from "../Context/theme/ThemeContext";
@@ -100,7 +96,7 @@ export default ForgotPassword;
 //     setLoading(true);
 
 //     try {
-//       const res = await fetch(`${ import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}/api/auth/forgot-password`, {
+//       const res = await fetch(`http://localhost:5000/api/auth/forgot-password`, {
 //         method: "POST",
 //         headers: {
 //           "Content-Type": "application/json"
@@ -153,4 +149,3 @@ export default ForgotPassword;
 // };
 
 // export default ForgotPassword;
-
