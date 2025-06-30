@@ -698,57 +698,47 @@ const AuthCard = ({ title, children, footer }) => {
 export default AuthCard;
 
 components/AuthCard.css
-import React, { useContext } from "react";
-import ThemeContext from "../Context/theme/ThemeContext";
-import { Link } from "react-router-dom";
+.auth-wrapper {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(120deg, #1f1c2c, #928dab);
+  padding: 2rem;
+}
 
-const AuthCard = ({ title, children, footer }) => {
-  const { mode } = useContext(ThemeContext);
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 2.5rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: white;
+}
 
-  return (
-    <div
-      className={`d-flex justify-content-center align-items-center vh-100 ${
-        mode === "dark" ? "bg-dark text-light" : "bg-light text-dark"
-      }`}
-    >
-      <div
-        className={`card shadow p-4 rounded-4 w-100 mx-3`}
-        style={{
-          maxWidth: "400px",
-          backgroundColor: mode === "dark" ? "#1e1e1e" : "#ffffff",
-        }}
-      >
-        <h2 className="text-center mb-4">{title}</h2>
-        {children}
-        {footer && (
-          <div className="text-center mt-4">
-            <small
-              className={mode === "dark" ? "text-light" : "text-secondary"}
-            >
-              {footer.includes("Login") ? (
-                <>
-                  {footer.split("Login")[0]}
-                  <Link to="/login" className="ms-1">
-                    Login instead
-                  </Link>
-                </>
-              ) : (
-                <>
-                  {footer.split("Signup")[0]}
-                  <Link to="/signup" className="ms-1">
-                    Sign up now!
-                  </Link>
-                </>
-              )}
-            </small>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+.auth-title {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  font-weight: bold;
+  font-size: 1.75rem;
+}
 
-export default AuthCard;
+.auth-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-footer {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #ddd;
+}
 
 
 components/ForgotPassword.js
@@ -771,7 +761,7 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/forgot-password", {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/auth/forgot-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -825,34 +815,6 @@ const ForgotPassword = () => {
 
 export default ForgotPassword;
 
-
-components/Alert.js
-import React from 'react';
-
-function Alert(props) {
-  const capitalize = (word) => {
-    if(word === "danger") {
-      word = "error";
-    }
-    if (!word) return "";
-    return word[0].toUpperCase() + word.slice(1);
-  };
-
-  return (
-    props.alert && (
-      <div style={{ height: '50px' }}>
-        <div className={`alert alert-${props.alert.type} alert-dismissible fade show`} role="alert">
-          <strong>{capitalize(props.alert.type)}</strong>: {props.alert.msg}
-        </div>
-      </div>
-    )
-  );
-}
-
-export default Alert;
-
-
-
 components/Home.js
 import React, { useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
@@ -886,8 +848,8 @@ const Home = (props) => {
   );
 };
 
-export default Home;
 
+export default Home;
 
 
 components/LandingPage.js
@@ -915,9 +877,18 @@ const LandingPage = () => {
           <h1 className="display-4">Welcome to NovaBook</h1>
           <p className="lead">Your secure cloud-based notebook, accessible anywhere, anytime.</p>
           <div className="d-flex justify-content-center gap-3 mt-4">
-            <Link to="/signup" className="btn btn-primary btn-lg">Get Started</Link>
-            <Link to="/login" className="btn btn-outline-light btn-lg">Login</Link>
-          </div>
+  {!localStorage.getItem("token") ? (
+    <>
+      <Link to="/signup" className="btn btn-primary btn-lg">Get Started</Link>
+      <Link to="/login" className="btn btn-outline-light btn-lg">Login</Link>
+    </>
+  ) : (
+    <Link to="/dashboard" className="btn btn-success btn-lg">
+      Your Notes →
+    </Link>
+  )}
+</div>
+
         </div>
       </section>
 
@@ -961,7 +932,7 @@ const LandingPage = () => {
       <section id="contact" className="py-5 bg-dark text-light">
         <div className="container text-center">
           <h2 className="mb-4" data-aos="fade-up">Contact</h2>
-          <p>Email: support@novabook.com</p>
+          <p>Email: himanshumagar1030@gmail.com</p>
           <p>© {new Date().getFullYear()} NovaBook. All rights reserved.</p>
           <div className="mt-3" data-aos="zoom-in">
             <a href="https://twitter.com" className="text-light mx-2"><i className="fab fa-twitter fa-lg"></i></a>
@@ -975,6 +946,7 @@ const LandingPage = () => {
 };
 
 export default LandingPage;
+
 
 components/LandingPage.css
 /* src/components/LandingPage.css */
@@ -1073,16 +1045,16 @@ const Login = (props) => {
   }, []);
 
   const [credentials, setCredentials] = useState({ email: "", password: "" });
-  const [loading, setLoading] = useState(false); // ✅ Loading state
+  const [loading, setLoading] = useState(false); // Loading state
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setLoading(true); // ⏳ Start loading
+    setLoading(true);     //Start loading
 
     try {
-      const url = `http://localhost:5000/api/auth/login`;
+      const url = `${process.env.REACT_APP_API_URL}/api/auth/login`;
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -1095,7 +1067,7 @@ const Login = (props) => {
       });
 
       const json = await response.json();
-      setLoading(false); // ✅ End loading
+      setLoading(false); 
 
       if (json.success) {
         localStorage.setItem("token", json.authtoken);
@@ -1156,7 +1128,7 @@ const Login = (props) => {
         <button
           type="submit"
           className="btn btn-primary w-100 mt-4"
-          disabled={loading} // 🚫 Prevent double clicks
+          disabled={loading} 
         >
           {loading ? (
             <>
@@ -1210,8 +1182,13 @@ const Navbar = () => {
       }`}
     >
       <div className="container-fluid">
-        <Link className="navbar-brand" to="/">
-          NovaBook
+        <Link className="navbar-brand d-flex align-items-center" to="/">
+          <img
+            src={mode === "dark" ? "/novabook-dark.png" : "/novabook-light.png"}
+            alt="NovaBook Logo"
+            style={{ height: "45px", marginRight: "20px" }}
+          />
+          <span className="fw-bold">NovaBook</span>
         </Link>
         <button
           className="navbar-toggler"
@@ -1240,16 +1217,6 @@ const Navbar = () => {
                   </Link>
                 </li>
                 <li className="nav-item">
-                  <Link
-                    className={`nav-link ${
-                      location.pathname === "/about" ? "active" : ""
-                    }`}
-                    to="/about"
-                  >
-                    About
-                  </Link>
-                </li>
-                <li className="nav-item">
                   <a className="nav-link" href="#features">
                     Features
                   </a>
@@ -1258,6 +1225,16 @@ const Navbar = () => {
                   <a className="nav-link" href="#contact">
                     Contact
                   </a>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link ${
+                      location.pathname === "/about" ? "active" : ""
+                    }`}
+                    to="/about"
+                  >
+                    About
+                  </Link>
                 </li>
               </>
             ) : (
@@ -1275,21 +1252,21 @@ const Navbar = () => {
                 <li className="nav-item">
                   <Link
                     className={`nav-link ${
-                      location.pathname === "/about" ? "active" : ""
-                    }`}
-                    to="/about"
-                  >
-                    About
-                  </Link>
-                </li>
-                <li className="nav-item">
-                  <Link
-                    className={`nav-link ${
                       location.pathname === "/trash" ? "active" : ""
                     }`}
                     to="/trash"
                   >
                     🗑️ Trash
+                  </Link>
+                </li>
+                <li className="nav-item">
+                  <Link
+                    className={`nav-link ${
+                      location.pathname === "/about" ? "active" : ""
+                    }`}
+                    to="/about"
+                  >
+                    About
                   </Link>
                 </li>
               </>
@@ -1403,6 +1380,7 @@ const NoteItem = (props) => {
 
 export default NoteItem;
 
+
 components/NotePreviewModal.js
 import React from "react";
 import moment from "moment";
@@ -1496,7 +1474,7 @@ const Notes = (props) => {
   const ref = useRef(null);
   const refClose = useRef(null);
 
-  const [note, setNote] = useState({
+  const [editingNote, setEditingNote] = useState({
     id: "",
     etitle: "",
     edescription: "",
@@ -1506,7 +1484,7 @@ const Notes = (props) => {
 
   const updateNotes = (currentnote) => {
     ref.current.click();
-    setNote({
+    setEditingNote({
       id: currentnote._id,
       etitle: currentnote.title,
       edescription: currentnote.description,
@@ -1516,14 +1494,14 @@ const Notes = (props) => {
   };
 
   const handleClick = (e) => {
-    editNote(note.id, note.etitle, note.edescription, note.etag, note.epinned);
+    editNote(editingNote.id, editingNote.etitle, editingNote.edescription, editingNote.etag, editingNote.epinned);
     refClose.current.click();
     e.preventDefault();
     props.showAlert("Note Updated Successfully", "success");
   };
 
   const onchange = (e) => {
-    setNote({ ...note, [e.target.name]: e.target.value });
+    setEditingNote({ ...editingNote, [e.target.name]: e.target.value });
   };
 
   // Filter notes by title or description
@@ -1626,40 +1604,45 @@ const Notes = (props) => {
   };
 
   return (
-    <div>
+   <div>
       <AddNote showAlert={props.showAlert} />
+       <h1 align="center">Your notes</h1>
+       
 
-      <div className="container my-3">
-        <div className="row mb-3">
-          <div className="col-md-3">
+      {/* Top Controls Row */}
+      <div className="container my-5">
+        <div className="row mb-3 align-items-end">
+          {/* Search Input */}
+          <div className="col-md-3 mb-2">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="🔍 Search Notes..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Tag Filter */}
+          <div className="col-md-3 mb-2">
             <select
-              className={`form-select ${
-                mode === "dark" ? "bg-dark text-light border-secondary" : ""
-              }`}
+              className={`form-select ${mode === "dark" ? "bg-dark text-light border-secondary" : ""}`}
               value={selectedTag}
               onChange={(e) => setSelectedTag(e.target.value)}
             >
               <option value="All">All Tags</option>
-              {[
-                ...new Set(
-                  notes
-                    .filter((note) => !note.trashed) // 👈 filter out trashed notes
-                    .map((note) => note.tag)
-                ),
-              ]
-                .filter((tag) => tag) // Optional: remove empty tags
+              {[...new Set(notes.filter((note) => !note.trashed).map((note) => note.tag))]
+                .filter((tag) => tag)
                 .map((tag) => (
-                  <option key={tag} value={tag}>
-                    {tag}
-                  </option>
+                  <option key={tag} value={tag}>{tag}</option>
                 ))}
             </select>
           </div>
-          <div className="col-md-3">
+
+          {/* Sort Option */}
+          <div className="col-md-3 mb-2">
             <select
-              className={`form-select ${
-                mode === "dark" ? "bg-dark text-light border-secondary" : ""
-              }`}
+              className={`form-select ${mode === "dark" ? "bg-dark text-light border-secondary" : ""}`}
               value={sortOption}
               onChange={(e) => setSortOption(e.target.value)}
             >
@@ -1669,219 +1652,153 @@ const Notes = (props) => {
               <option value="title-desc">🔤 Z-A</option>
             </select>
           </div>
-        </div>
-      </div>
 
-      {/* Hidden Modal Trigger Button */}
-      <button
-        type="button"
-        className="btn btn-primary d-none"
-        ref={ref}
-        data-bs-toggle="modal"
-        data-bs-target="#exampleModal"
-      >
-        Launch demo modal
-      </button>
-
-      {/* Modal */}
-      <div
-        className="modal fade"
-        id="exampleModal"
-        tabIndex="-1"
-        aria-labelledby="exampleModalLabel"
-        aria-hidden="true"
-      >
-        <div className="modal-dialog">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h1 className="modal-title fs-5" id="exampleModalLabel">
-                Edit Your Note
-              </h1>
+          {/* Download Button */}
+          <div className="col-md-3 mb-2 text-end">
+            <div className="dropdown">
               <button
+                className="btn btn-outline-secondary dropdown-toggle w-100"
                 type="button"
-                className="btn-close"
-                data-bs-dismiss="modal"
-                aria-label="Close"
-              ></button>
-            </div>
-            <div className="modal-body">
-              <form className="My-3">
-                <div className="mb-3">
-                  <label htmlFor="title" className="form-label">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    value={note.etitle}
-                    className="form-control"
-                    id="etitle"
-                    name="etitle"
-                    onChange={onchange}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="description" className="form-label">
-                    Description
-                  </label>
-                  <input
-                    type="text"
-                    value={note.edescription}
-                    className="form-control"
-                    id="edescription"
-                    name="edescription"
-                    onChange={onchange}
-                  />
-                </div>
-                <div className="mb-3">
-                  <label htmlFor="tag" className="form-label">
-                    Tag
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    value={note.etag}
-                    id="etag"
-                    name="etag"
-                    onChange={onchange}
-                  />
-                </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                data-bs-dismiss="modal"
-                ref={refClose}
+                id="downloadDropdown"
+                data-bs-toggle="dropdown"
+                aria-expanded="false"
               >
-                Close
+                ⬇️ Download Notes
               </button>
-              <button
-                disabled={
-                  note.etitle.length < 5 || note.edescription.length < 5
-                }
-                type="button"
-                onClick={handleClick}
-                className="btn btn-primary"
-              >
-                Save changes
-              </button>
+              <ul className="dropdown-menu" aria-labelledby="downloadDropdown">
+                <li><button className="dropdown-item" onClick={handleExportTxt}>📄 Export as .txt</button></li>
+                <li><button className="dropdown-item" onClick={handleExportJson}>🧾 Export as .json</button></li>
+                <li><button className="dropdown-item" onClick={handleExportPDF}>📚 Export as .pdf</button></li>
+              </ul>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Search Bar */}
-      <div className="container my-3">
-        <input
-          type="text"
-          className="form-control mb-4"
-          placeholder="🔍 Search notes by title or description..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
 
-        <div className="d-flex justify-content-between align-items-center mb-3">
-  <h2 className="mb-0">Your Notes</h2>
-        <div className="dropdown text-end mb-3">
-          <button
-            className="btn btn-outline-secondary dropdown-toggle"
-            type="button"
-            id="downloadDropdown"
-            data-bs-toggle="dropdown"
-            aria-expanded="false"
-          >
-            ⬇️ Download Notes
-          </button>
-          <ul className="dropdown-menu" aria-labelledby="downloadDropdown">
-            <li>
-              <button className="dropdown-item" onClick={handleExportTxt}>
-                📄 Export as .txt
-              </button>
-            </li>
-            <li>
-              <button className="dropdown-item" onClick={handleExportJson}>
-                🧾 Export as .json
-              </button>
-            </li>
-            <li>
-              <button className="dropdown-item" onClick={handleExportPDF}>
-                📚 Export as .pdf
-              </button>
-            </li>
-          </ul>
+
+        {/* Edit Note Modal (Bootstrap) */}
+        <button
+          type="button"
+          className="btn btn-primary d-none"
+          ref={ref}
+          data-bs-toggle="modal"
+          data-bs-target="#exampleModal"
+        >
+          Launch demo modal
+        </button>
+
+        <div className="modal fade" id="exampleModal" tabIndex="-1" aria-hidden="true">
+          <div className="modal-dialog">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Edit Your Note</h5>
+                <button type="button" className="btn-close" data-bs-dismiss="modal"></button>
+              </div>
+              <div className="modal-body">
+                <form>
+                  <div className="mb-3">
+                    <label htmlFor="etitle" className="form-label">Title</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="etitle"
+                      name="etitle"
+                      value={editingNote.etitle}
+                      onChange={onchange}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="edescription" className="form-label">Description</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="edescription"
+                      name="edescription"
+                      value={editingNote.edescription}
+                      onChange={onchange}
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="etag" className="form-label">Tag</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      id="etag"
+                      name="etag"
+                      value={editingNote.etag}
+                      onChange={onchange}
+                    />
+                  </div>
+                </form>
+              </div>
+              <div className="modal-footer">
+                <button ref={refClose} className="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleClick}
+                  disabled={editingNote.etitle.length < 5 || editingNote.edescription.length < 5}
+                >
+                  Save changes
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-        </div>
 
+        {/* Notes Section */}
         <div className="row my-3">
           {isEmpty && (
-            <>
-              <img
-                src="https://cdn-icons-png.flaticon.com/512/4076/4076500.png"
-                alt="Empty"
-                style={{ width: "120px", opacity: 0.5 }}
-              />
+            <div className="text-center">
+              <img src="https://cdn-icons-png.flaticon.com/512/4076/4076500.png" alt="Empty" style={{ width: "120px", opacity: 0.5 }} />
               <h5 className="mt-3">No notes found</h5>
               <p className="text-muted">Create your first note above.</p>
-            </>
+            </div>
           )}
 
-          {/* Pinned Notes */}
           {pinnedNotes.length > 0 && (
             <>
               <h4 className="mt-4">📌 Pinned</h4>
-              {loading ? (
-                <>
-                  <SkeletonCard />
-                  <SkeletonCard />
-                  <SkeletonCard />
-                </>
-              ) : (
-                pinnedNotes.map((note) => (
-                  <NoteItem
-                    key={note._id}
-                    note={note}
-                    updateNotes={updateNotes}
-                    showAlert={props.showAlert}
-                    togglePin={togglePin}
-                    mode={mode}
-                    onPreviewClick={handleNoteClick}
-                  />
-                ))
-              )}
+              {loading
+                ? [1, 2, 3].map((i) => <SkeletonCard key={i} />)
+                : pinnedNotes.map((note) => (
+                    <NoteItem
+                      key={note._id}
+                      note={note}
+                      updateNotes={updateNotes}
+                      showAlert={props.showAlert}
+                      togglePin={togglePin}
+                      mode={mode}
+                      onPreviewClick={handleNoteClick}
+                    />
+                  ))}
             </>
           )}
 
-          {/* Unpinned Notes */}
           {unpinnedNotes.length > 0 && (
             <>
               <h4 className="mt-4">🗂️ Others</h4>
-              {loading ? (
-                <>
-                  <SkeletonCard />
-                  <SkeletonCard />
-                  <SkeletonCard />
-                </>
-              ) : (
-                unpinnedNotes.map((note) => (
-                  <NoteItem
-                    key={note._id}
-                    note={note}
-                    updateNotes={updateNotes}
-                    showAlert={props.showAlert}
-                    togglePin={togglePin}
-                    onPreviewClick={handleNoteClick}
-                  />
-                ))
-              )}
+              {loading
+                ? [1, 2, 3].map((i) => <SkeletonCard key={i} />)
+                : unpinnedNotes.map((note) => (
+                    <NoteItem
+                      key={note._id}
+                      note={note}
+                      updateNotes={updateNotes}
+                      showAlert={props.showAlert}
+                      togglePin={togglePin}
+                      onPreviewClick={handleNoteClick}
+                    />
+                  ))}
             </>
           )}
         </div>
-        <NotePreviewModal note={selectedNote} mode={mode} />
       </div>
+
+      <NotePreviewModal note={selectedNote} mode={mode} />
     </div>
   );
 };
+
 
 export default Notes;
 
@@ -1933,9 +1850,9 @@ const ResetPassword = () => {
     }
 
     try {
-      setLoading(true); // Start spinner
+      setLoading(true); 
       const response = await fetch(
-        `http://localhost:5000/api/auth/reset-password/${token}`,
+        `${process.env.REACT_APP_API_URL}/api/auth/reset-password/${token}`,
         {
           method: "POST",
           headers: {
@@ -1946,7 +1863,7 @@ const ResetPassword = () => {
       );
 
       const json = await response.json();
-      setLoading(false); // Stop spinner
+      setLoading(false);
 
       if (json.message) {
         setMessage(json.message);
@@ -2076,8 +1993,8 @@ const Signup = (props) => {
     }
 
     try {
-      setLoading(true); // 🔄 Start loading
-      const url = `http://localhost:5000/api/auth/createuser`;
+      setLoading(true);
+      const url = `${process.env.REACT_APP_API_URL}/api/auth/createuser`;
       const { name, email, password } = credentials;
 
       const response = await fetch(url, {
@@ -2087,7 +2004,7 @@ const Signup = (props) => {
       });
 
       const json = await response.json();
-      setLoading(false); // ✅ Stop loading
+      setLoading(false); 
 
       if (json.success) {
         localStorage.setItem("token", json.authtoken);
@@ -2237,6 +2154,7 @@ const Signup = (props) => {
 };
 
 export default Signup;
+
 
 components\SkeletonCard.js
 // src/components/SkeletonCard.js
@@ -2395,9 +2313,7 @@ export default Trash;
 
 Context\notes\noteContext.js
 import { createContext } from "react";  
-
 const NoteContext = createContext();
-
 export default NoteContext;
 
 
@@ -2406,9 +2322,10 @@ import React, { useState } from "react";
 import NoteContext from "./noteContext";
 
 const Notestate = (props) => {
-  const host = "http://localhost:5000";
+  const host = `${process.env.REACT_APP_API_URL}`;
   const notesInitial = [];
   const [notes, setNotes] = useState(notesInitial);
+
 
   // get all note
   const getNotes = async () => {
@@ -2419,12 +2336,13 @@ const Notestate = (props) => {
       headers: {
         "Content-Type": "application/json",
         "auth-token":
-          localStorage.getItem("token"), // Assuming you store the token in localStorage
+          localStorage.getItem("token"), 
       },
     });
     const json = await response.json();
     setNotes(json);
   };
+
 
   // Add a note
   const addNote = async (title, description, tag, pinned) => {
@@ -2444,8 +2362,8 @@ const Notestate = (props) => {
     setNotes(notes.concat(note));
   };
 
-  // Delete a note
 
+  // Delete a note
   const deleteNote = async (id) => {
     const url = `${host}/api/notes/deletenote/${id}`;
     const response = await fetch(url, {
@@ -2460,6 +2378,7 @@ const Notestate = (props) => {
     const newNotes = notes.filter((note) => note._id !== id);
     setNotes(newNotes);
   };
+
 
   // Edit a note
   const editNote = async (id, title, description, tag, pinned = false) => {
@@ -2491,7 +2410,8 @@ const Notestate = (props) => {
     setNotes(newNotes);
   };
 
-  // 🗑️ Move Note to Trash
+
+  // Move Note to Trash
 const trashNote = async (id) => {
   const response = await fetch(`${host}/api/notes/trashnote/${id}`, {
     method: "PUT",
@@ -2504,7 +2424,8 @@ const trashNote = async (id) => {
   getNotes();
 };
 
-// ♻️ Restore Note from Trash
+
+// Restore Note from Trash
 const restoreNote = async (id) => {
   const response = await fetch(`${host}/api/notes/restorenote/${id}`, {
     method: "PUT",
@@ -2517,7 +2438,8 @@ const restoreNote = async (id) => {
   getNotes();
 };
 
-// ❌ Permanently Delete from Trash
+
+// Permanently Delete from Trash
 const deleteForeverNote = async (id) => {
   const response = await fetch(`${host}/api/notes/deleteforever/${id}`, {
     method: "DELETE",
@@ -2553,7 +2475,6 @@ export const ThemeProvider = ({ children }) => {
     const newMode = mode === 'light' ? 'dark' : 'light';
     setMode(newMode);
 
-    // Set <body> class
     document.body.classList.toggle('dark', newMode === 'dark');
   };
 
@@ -2572,15 +2493,15 @@ import React, { useState, useEffect } from "react";
 import ThemeContext from "./ThemeContext";
 
 const ThemeState = (props) => {
-  // 🟢 Load initial mode from localStorage or default to 'light'
+  // Load initial mode from localStorage or default to 'light'
   const [mode, setMode] = useState(() => localStorage.getItem("theme") || "light");
 
   useEffect(() => {
-    // 🌓 Apply mode class to body
+    //  Apply mode class to body
     document.body.classList.toggle("dark", mode === "dark");
     document.body.classList.toggle("light", mode === "light");
 
-    // 💾 Save to localStorage
+    // Save to localStorage
     localStorage.setItem("theme", mode);
 
     // Apply color styles too
@@ -2692,8 +2613,6 @@ function App() {
 }
 
 export default App;
-
-App.css
 .App {
   text-align: center;
 }
@@ -2891,4 +2810,7 @@ body.dark .react-loading-skeleton {
   --highlight-color: #444;
 }
 
+.navbar-dark .navbar-brand img {
+  filter: brightness(90%);
+}
 

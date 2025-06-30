@@ -195,4 +195,7 @@ body.dark .react-loading-skeleton {
   --highlight-color: #444;
 }
 
+.navbar-dark .navbar-brand img {
+  filter: brightness(90%);
+}
 

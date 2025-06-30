@@ -4,15 +4,20 @@ import AuthCard from "./AuthCard";
 import "./AuthCard.css";
 
 const Login = (props) => {
-  useEffect(() => {
-    document.title = "Login | NovaBook";
-  }, []);
-
+  
+  const navigate = useNavigate();
   const [credentials, setCredentials] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false); // Loading state
-  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  
+  useEffect(() => {
+    document.title = "Login | NovaBook";
+     if (localStorage.getItem("token")) {
+      navigate("/dashboard");
+    }
+  }, [navigate]);
 
+  
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);     //Start loading
@@ -122,6 +127,11 @@ export default Login;
 
 
 
+
+
+
+
+
 // import React, { useState, useEffect } from "react";
 // import { useNavigate } from "react-router-dom";
 // import AuthCard from "./AuthCard";
@@ -142,7 +152,7 @@ export default Login;
 //     setLoading(true);     //Start loading
 
 //     try {
-//       const url = `http://localhost:5000/api/auth/login`;
+//       const url = `${process.env.REACT_APP_API_URL}/api/auth/login`;
 //       const response = await fetch(url, {
 //         method: "POST",
 //         headers: {
@@ -242,3 +252,5 @@ export default Login;
 // };
 
 // export default Login;
+
+

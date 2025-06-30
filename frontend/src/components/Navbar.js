@@ -20,8 +20,13 @@ const Navbar = () => {
       }`}
     >
       <div className="container-fluid">
-        <Link className="navbar-brand" to="/">
-          NovaBook
+        <Link className="navbar-brand d-flex align-items-center" to="/">
+          <img
+            src={mode === "dark" ? "/novabook-dark.png" : "/novabook-light.png"}
+            alt="NovaBook Logo"
+            style={{ height: "45px", marginRight: "20px" }}
+          />
+          <span className="fw-bold">NovaBook</span>
         </Link>
         <button
           className="navbar-toggler"
@@ -48,7 +53,7 @@ const Navbar = () => {
                   >
                     Home
                   </Link>
-                </li>   
+                </li>
                 <li className="nav-item">
                   <a className="nav-link" href="#features">
                     Features

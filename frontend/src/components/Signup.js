@@ -27,16 +27,14 @@ const getPasswordStrength = (password) => {
 };
 
 const Signup = (props) => {
-  useEffect(() => {
-    document.title = "Login | NovaBook";
-  }, []);
+  
   const [credentials, setCredentials] = useState({
     name: "",
     email: "",
     password: "",
     cpassword: "",
   });
-
+  
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const passwordsMatch = credentials.password === credentials.cpassword;
   const navigate = useNavigate();
@@ -44,7 +42,14 @@ const Signup = (props) => {
   const isPasswordStrong = Object.values(
     passwordChecks(credentials.password)
   ).every(Boolean);
-
+  
+  useEffect(() => {
+    document.title = "Signup | NovaBook";
+     if (localStorage.getItem("token")) {
+    navigate("/dashboard");
+  }
+  }, [navigate]);
+  
   const handleSubmit = async (event) => {
     event.preventDefault();
 
