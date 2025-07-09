@@ -89,6 +89,7 @@ const LandingPage = () => {
           <h2 className="mb-4" data-aos="fade-up">
             Contact
           </h2>
+          <p>Creator - Himanshu Magar</p>
           <p>Email: himanshumagar1030@gmail.com</p>
           <p>© {new Date().getFullYear()} NovaBook. All rights reserved.</p>
           <div className="mt-3" data-aos="zoom-in">
