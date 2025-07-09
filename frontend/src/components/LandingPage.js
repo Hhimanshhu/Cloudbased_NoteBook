@@ -25,14 +25,11 @@ const LandingPage = () => {
             {!localStorage.getItem("token") ? (
               <>
                 <Link
-  to="/signup"
-  className={`btn btn-lg ${mode === "dark" ? "btn-primary" : "btn-warning text-dark"}`}
->
-  Get Started
-</Link>
-
-
-
+                  to="/signup"
+                  className={`btn btn-lg ${mode === "dark" ? "btn-primary" : "btn-warning text-dark"}`}
+                >
+                  Get Started
+                </Link>
 
                 <Link to="/login" className="btn btn-outline-light btn-lg">
                   Login
